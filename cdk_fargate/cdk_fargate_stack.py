@@ -1,5 +1,5 @@
 from aws_cdk import core as cdk
-from aws_cdk import aws_ecs as ecs, aws_ec2 as ec2
+from aws_cdk import aws_ecs as ecs, aws_ec2 as ec2, aws_elasticloadbalancingv2 as elbv2
 
 
 class CdkFargateStack(cdk.Stack):
@@ -10,7 +10,7 @@ class CdkFargateStack(cdk.Stack):
         _vpc = ec2.Vpc.from_lookup(
             self,
             "vpc",
-            vpc_id=vpc_id
+            is_default=True
         )
 
         _cluster = ecs.Cluster(
@@ -26,15 +26,26 @@ class CdkFargateStack(cdk.Stack):
             cpu=256
         )
 
-        _task_def.add_container(
+        _container = _task_def.add_container(
             "taskcontainer",
             image=ecs.ContainerImage.from_registry("amazon/amazon-ecs-sample")
         )
+        _container.add_port_mappings(ecs.PortMapping(container_port=3000, protocol=ecs.Protocol.TCP))
 
-        ecs.FargateService(
+        service = ecs.FargateService(
             self,
             "fargateservuce",
             cluster=_cluster,
             task_definition=_task_def,
-            desired_count=5
+            desired_count=1
+        )
+
+        lb = elbv2.ApplicationLoadBalancer(self, "LB", vpc=_vpc, internet_facing=True)
+
+        listener = lb.add_listener("Listener", port=80)
+
+        target_group = listener.add_targets(
+            "fargateTarget",
+            port=80,
+            targets=[service]
         )
